@@ -1,0 +1,26 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]        # Async SQLAlchemy support
+aiosqlite                  # Async SQLite driver
+scikit-learn
+numpy
+scipy
+python-multipart
+python-magic
+websockets
+python-dotenv
+
+# Microsoft Entra ID (Azure AD) Authentication
+PyJWT[crypto]              # JWT token validation (replaces deprecated python-jose)
+httpx                      # Async HTTP client for JWKS fetching
+
+# Document text extraction (optional but recommended)
+python-docx    # For .docx Word documents
+pypdf          # For PDF files (successor to PyPDF2)
+pycryptodome   # For encrypted PDF files (used by pypdf)
+openpyxl       # For .xlsx Excel files
+python-pptx    # For .pptx PowerPoint files
+
+# Optional: Redis storage backend (for high performance)
+# Uncomment if using Redis:
+redis[hiredis]

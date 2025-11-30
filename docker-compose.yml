@@ -1,0 +1,99 @@
+# Docker Compose for MLP Code Guardian
+# Usage: docker-compose up -d
+
+services:
+  # Backend API
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mlp-code-guardian-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - DATABASE_URL=sqlite:///./data/dlp_sentinel.db
+      # Storage backend: sqlite or redis
+      - STORAGE_BACKEND=sqlite
+      # Connection pooling
+      - DB_POOL_SIZE=10
+      - DB_POOL_MAX_OVERFLOW=20
+      - DB_POOL_TIMEOUT=30
+      - DB_POOL_RECYCLE=3600
+      # Microsoft Entra ID Authentication (optional)
+      - ENTRA_TENANT_ID=${ENTRA_TENANT_ID:-}
+      - ENTRA_CLIENT_ID=${ENTRA_CLIENT_ID:-}
+      - ENTRA_REQUIRED_ROLE=${ENTRA_REQUIRED_ROLE:-admin}
+      # Redis (if using redis storage backend)
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+    volumes:
+      # Persist database
+      - backend-data:/app/data
+      # Mount scan directories (customize as needed)
+      - ${SCAN_SOURCE_DIR:-./data/source}:/mnt/source:ro
+      - ${SCAN_TARGET_DIR:-./data/target}:/mnt/target:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - mlp-network
+
+  # Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:8000}
+        - VITE_ENTRA_CLIENT_ID=${VITE_ENTRA_CLIENT_ID:-}
+        - VITE_ENTRA_TENANT_ID=${VITE_ENTRA_TENANT_ID:-}
+        - VITE_ENTRA_REDIRECT_URI=${VITE_ENTRA_REDIRECT_URI:-http://localhost:3000}
+    container_name: mlp-code-guardian-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+    networks:
+      - mlp-network
+
+  # Redis (optional - for high-performance storage backend)
+  redis:
+    image: redis:7-alpine
+    container_name: mlp-code-guardian-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - mlp-network
+    profiles:
+      - redis  # Only start with: docker-compose --profile redis up
+
+volumes:
+  backend-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  mlp-network:
+    driver: bridge
