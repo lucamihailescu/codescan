@@ -185,15 +185,28 @@ app.add_middleware(
 
 # ============ Path Security Validation ============
 
+# Define allowed base directories for scanning (optional security hardening)
+# Set via environment variable as comma-separated paths, or leave empty to allow any path
+ALLOWED_SCAN_DIRECTORIES = [
+    p.strip() for p in os.environ.get("ALLOWED_SCAN_DIRECTORIES", "").split(",") if p.strip()
+]
+
+
 def validate_path_security(path: str) -> str:
     """
     Validate and sanitize a file path to prevent path traversal attacks.
     
+    This function performs comprehensive security validation:
+    1. Rejects empty paths and null bytes
+    2. Resolves the path to an absolute canonical form
+    3. Optionally validates against allowed directory whitelist
+    4. Verifies the resolved path exists and is a directory
+    
     Args:
-        path: The path to validate
+        path: The path to validate (from user input)
         
     Returns:
-        The validated absolute path
+        The validated absolute path (canonicalized and verified)
         
     Raises:
         HTTPException: If the path is invalid or potentially malicious
@@ -201,24 +214,40 @@ def validate_path_security(path: str) -> str:
     if not path:
         raise HTTPException(status_code=400, detail="Path cannot be empty")
     
-    # Resolve to absolute path to normalize any relative components
+    # Check for null bytes before any path operations (common injection technique)
+    if '\x00' in path:
+        raise HTTPException(status_code=400, detail="Invalid characters in path")
+    
+    # Resolve to absolute canonical path to normalize any relative components
+    # This neutralizes path traversal attempts like ../../etc/passwd
     try:
         resolved_path = os.path.realpath(os.path.abspath(path))
     except (ValueError, OSError) as e:
         raise HTTPException(status_code=400, detail=f"Invalid path format: {str(e)}")
     
-    # Check for null bytes (common injection technique)
-    if '\x00' in path:
-        raise HTTPException(status_code=400, detail="Invalid characters in path")
+    # If allowed directories are configured, validate against whitelist
+    if ALLOWED_SCAN_DIRECTORIES:
+        is_allowed = any(
+            resolved_path.startswith(os.path.realpath(allowed_dir))
+            for allowed_dir in ALLOWED_SCAN_DIRECTORIES
+        )
+        if not is_allowed:
+            raise HTTPException(
+                status_code=403, 
+                detail="Access denied: path is outside allowed directories"
+            )
     
-    # Ensure the path exists and is a directory
-    if not os.path.exists(resolved_path):
+    # Verify the canonicalized path exists using pathlib for additional safety
+    from pathlib import Path
+    validated = Path(resolved_path)
+    
+    if not validated.exists():
         raise HTTPException(status_code=400, detail="Path does not exist")
     
-    if not os.path.isdir(resolved_path):
+    if not validated.is_dir():
         raise HTTPException(status_code=400, detail="Path must be a directory")
     
-    return resolved_path
+    return str(validated.resolve())
 
 
 # ============ Request/Response Models ============
