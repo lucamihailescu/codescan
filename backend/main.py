@@ -183,6 +183,44 @@ app.add_middleware(
 )
 
 
+# ============ Path Security Validation ============
+
+def validate_path_security(path: str) -> str:
+    """
+    Validate and sanitize a file path to prevent path traversal attacks.
+    
+    Args:
+        path: The path to validate
+        
+    Returns:
+        The validated absolute path
+        
+    Raises:
+        HTTPException: If the path is invalid or potentially malicious
+    """
+    if not path:
+        raise HTTPException(status_code=400, detail="Path cannot be empty")
+    
+    # Resolve to absolute path to normalize any relative components
+    try:
+        resolved_path = os.path.realpath(os.path.abspath(path))
+    except (ValueError, OSError) as e:
+        raise HTTPException(status_code=400, detail=f"Invalid path format: {str(e)}")
+    
+    # Check for null bytes (common injection technique)
+    if '\x00' in path:
+        raise HTTPException(status_code=400, detail="Invalid characters in path")
+    
+    # Ensure the path exists and is a directory
+    if not os.path.exists(resolved_path):
+        raise HTTPException(status_code=400, detail="Path does not exist")
+    
+    if not os.path.isdir(resolved_path):
+        raise HTTPException(status_code=400, detail="Path must be a directory")
+    
+    return resolved_path
+
+
 # ============ Request/Response Models ============
 
 class PathRequest(BaseModel):
@@ -319,11 +357,11 @@ async def index_path(
     
     Use `/ws/index/{index_id}` for real-time progress updates.
     """
-    if not os.path.exists(request.path):
-        raise HTTPException(status_code=400, detail="Path does not exist")
+    # Validate and sanitize the path to prevent path traversal attacks
+    validated_path = validate_path_security(request.path)
     
     # Log the indexing request with user context
-    log_with_user("info", f"Starting indexing of directory: {request.path}", user)
+    log_with_user("info", f"Starting indexing of directory: {validated_path}", user)
     
     # Run indexing in background with progress tracking
     import uuid
@@ -339,7 +377,7 @@ async def index_path(
         finally:
             db_session.close()
     
-    background_tasks.add_task(run_index_with_id, request.path, index_id)
+    background_tasks.add_task(run_index_with_id, validated_path, index_id)
     return {"index_id": index_id, "message": "Indexing started"}
 
 
@@ -474,11 +512,11 @@ async def scan_path(
     Use `/ws/scan/{scan_id}` for real-time progress updates.
     Use `/results/{scan_id}` to retrieve detected matches.
     """
-    if not os.path.exists(request.path):
-        raise HTTPException(status_code=400, detail="Path does not exist")
+    # Validate and sanitize the path to prevent path traversal attacks
+    validated_path = validate_path_security(request.path)
     
     # Log the scan request with user context
-    log_with_user("info", f"Starting scan of directory: {request.path}", user)
+    log_with_user("info", f"Starting scan of directory: {validated_path}", user)
     
     # Run scan in background so we can return immediately with scan_id
     import uuid
@@ -494,7 +532,7 @@ async def scan_path(
         finally:
             db_session.close()
     
-    background_tasks.add_task(run_scan_with_id, request.path, scan_id)
+    background_tasks.add_task(run_scan_with_id, validated_path, scan_id)
     return {"scan_id": scan_id, "message": "Scan started"}
 
 
