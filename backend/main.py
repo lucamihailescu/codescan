@@ -227,11 +227,19 @@ def validate_path_security(path: str) -> str:
     
     # If allowed directories are configured, validate against whitelist
     if ALLOWED_SCAN_DIRECTORIES:
-        is_allowed = any(
-            resolved_path.startswith(os.path.realpath(allowed_dir))
-            for allowed_dir in ALLOWED_SCAN_DIRECTORIES
-        )
-        if not is_allowed:
+        from pathlib import Path
+        resolved = Path(resolved_path)
+        allowed = False
+        for allowed_dir in ALLOWED_SCAN_DIRECTORIES:
+            allowed_root = Path(os.path.realpath(os.path.abspath(allowed_dir)))
+            try:
+                # Raises ValueError if resolved is not under allowed_root
+                resolved.relative_to(allowed_root)
+                allowed = True
+                break
+            except ValueError:
+                continue
+        if not allowed:
             raise HTTPException(
                 status_code=403, 
                 detail="Access denied: path is outside allowed directories"
