@@ -145,8 +145,8 @@ docker-compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
 | Image | Description | Port |
 |-------|-------------|------|
-| `mlp-code-guardian-backend` | FastAPI backend | 8000 |
-| `mlp-code-guardian-frontend` | React + Nginx | 80 |
+| `code-guardian-backend` | FastAPI backend | 8000 |
+| `code-guardian-frontend` | React + Nginx | 80 |
 | `redis:7-alpine` | Redis cache (optional) | 6379 |
 
 ### Docker Environment Variables
@@ -226,7 +226,7 @@ Create the following files in a `k8s/` directory:
 apiVersion: v1
 kind: Namespace
 metadata:
-  name: mlp-code-guardian
+  name: code-guardian
 ```
 
 **Backend Deployment** (`k8s/backend-deployment.yaml`):
@@ -235,7 +235,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: backend
-  namespace: mlp-code-guardian
+  namespace: code-guardian
 spec:
   replicas: 2
   selector:
@@ -248,7 +248,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: ghcr.io/myorg/mlp-code-guardian-backend:latest
+        image: ghcr.io/myorg/code-guardian-backend:latest
         ports:
         - containerPort: 8000
         env:
@@ -257,17 +257,17 @@ spec:
         - name: REDIS_URL
           valueFrom:
             secretKeyRef:
-              name: mlp-secrets
+              name: secrets
               key: redis-url
         - name: ENTRA_TENANT_ID
           valueFrom:
             secretKeyRef:
-              name: mlp-secrets
+              name: secrets
               key: entra-tenant-id
         - name: ENTRA_CLIENT_ID
           valueFrom:
             secretKeyRef:
-              name: mlp-secrets
+              name: secrets
               key: entra-client-id
         resources:
           limits:
@@ -303,7 +303,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: frontend
-  namespace: mlp-code-guardian
+  namespace: code-guardian
 spec:
   replicas: 2
   selector:
@@ -316,7 +316,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: ghcr.io/myorg/mlp-code-guardian-frontend:latest
+        image: ghcr.io/myorg/code-guardian-frontend:latest
         ports:
         - containerPort: 80
         resources:
@@ -344,7 +344,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: backend
-  namespace: mlp-code-guardian
+  namespace: code-guardian
 spec:
   selector:
     app: backend
@@ -356,7 +356,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: frontend
-  namespace: mlp-code-guardian
+  namespace: code-guardian
 spec:
   selector:
     app: frontend
@@ -370,8 +370,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: mlp-ingress
-  namespace: mlp-code-guardian
+  name: ingress
+  namespace: code-guardian
   annotations:
     kubernetes.io/ingress.class: nginx
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -380,7 +380,7 @@ spec:
   - hosts:
     - yourdomain.com
     - api.yourdomain.com
-    secretName: mlp-tls
+    secretName: tls
   rules:
   - host: yourdomain.com
     http:
@@ -409,8 +409,8 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: mlp-secrets
-  namespace: mlp-code-guardian
+  name: secrets
+  namespace: code-guardian
 type: Opaque
 stringData:
   redis-url: "redis://redis:6379"
@@ -431,11 +431,11 @@ kubectl apply -f k8s/secrets.yaml
 kubectl apply -f k8s/
 
 # Check status
-kubectl get pods -n mlp-code-guardian
-kubectl get services -n mlp-code-guardian
+kubectl get pods -n code-guardian
+kubectl get services -n code-guardian
 
 # View logs
-kubectl logs -f deployment/backend -n mlp-code-guardian
+kubectl logs -f deployment/backend -n code-guardian
 ```
 
 ### Helm Chart (Optional)
@@ -443,9 +443,9 @@ kubectl logs -f deployment/backend -n mlp-code-guardian
 For more complex deployments, consider creating a Helm chart:
 
 ```bash
-helm create mlp-code-guardian
+helm create code-guardian
 # Edit values.yaml and templates as needed
-helm install mlp-code-guardian ./mlp-code-guardian -n mlp-code-guardian
+helm install code-guardian ./code-guardian -n code-guardian
 ```
 
 ---

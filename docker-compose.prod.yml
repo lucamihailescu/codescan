@@ -3,7 +3,7 @@
 
 services:
   backend:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:-myorg}/mlp-code-guardian-backend:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:-myorg}/code-guardian-backend:${TAG:-latest}
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -32,7 +32,7 @@ services:
     volumes:
       - backend-data:/app/data
     networks:
-      - mlp-network
+      - network
     healthcheck:
       test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health')"]
       interval: 15s
@@ -41,7 +41,7 @@ services:
       start_period: 10s
 
   frontend:
-    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:-myorg}/mlp-code-guardian-frontend:${TAG:-latest}
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:-myorg}/code-guardian-frontend:${TAG:-latest}
     build:
       context: ./frontend
       dockerfile: Dockerfile
@@ -66,7 +66,7 @@ services:
     depends_on:
       - backend
     networks:
-      - mlp-network
+      - network
 
   redis:
     image: redis:7-alpine
@@ -79,7 +79,7 @@ services:
     volumes:
       - redis-data:/data
     networks:
-      - mlp-network
+      - network
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 15s
@@ -99,7 +99,7 @@ services:
       - frontend
       - backend
     networks:
-      - mlp-network
+      - network
     deploy:
       resources:
         limits:
@@ -111,5 +111,5 @@ volumes:
   redis-data:
 
 networks:
-  mlp-network:
+  network:
     driver: bridge
